@@ -1,0 +1,159 @@
+services:
+
+  # ==========================================================
+  # AIRFLOW METADATA DATABASE
+  # ==========================================================
+  postgres:
+    image: postgres:16
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - weather_network
+
+
+  # ==========================================================
+  # AIRFLOW
+  # ==========================================================
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+
+    container_name: airflow
+
+    depends_on:
+      - postgres
+
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+        postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+
+      WEATHER_API_KEY: ${WEATHER_API_KEY}
+      MONGODB_URI: ${MONGODB_URI}
+      DATABASE_URL: ${DATABASE_URL}
+
+      ETL_LOG_DIR: /opt/airflow/logs/etl
+      COLLECTION_LOG_DIR: /opt/airflow/logs/collection
+
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+      - ./notebooks:/opt/airflow/notebooks
+
+    ports:
+      - "8080:8080"
+
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create
+      --username admin
+      --password admin
+      --firstname Admin
+      --lastname User
+      --role Admin
+      --email admin@example.com || true &&
+      airflow scheduler &
+      airflow webserver
+      "
+
+    networks:
+      - weather_network
+
+
+  # ==========================================================
+  # SPARK MASTER
+  # ==========================================================
+  spark-master:
+    image: bitnami/spark:3.5.3
+    container_name: spark-master
+
+    environment:
+      - SPARK_MODE=master
+
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+
+    volumes:
+      - ./scripts:/opt/spark/scripts
+      - ./data:/opt/spark/data
+      - ./logs:/opt/spark/logs
+
+    networks:
+      - weather_network
+
+
+  # ==========================================================
+  # SPARK WORKER
+  # ==========================================================
+  spark-worker:
+    image: bitnami/spark:3.5.3
+    container_name: spark-worker
+
+    depends_on:
+      - spark-master
+
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+
+    volumes:
+      - ./scripts:/opt/spark/scripts
+      - ./data:/opt/spark/data
+      - ./logs:/opt/spark/logs
+
+    networks:
+      - weather_network
+
+
+  # ==========================================================
+  # JUPYTER NOTEBOOK
+  # ==========================================================
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: weather-jupyter
+
+    ports:
+      - "8888:8888"
+
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/home/jovyan/data
+      - ./scripts:/home/jovyan/scripts
+
+    networks:
+      - weather_network
+
+
+# ============================================================
+# VOLUMES
+# ============================================================
+volumes:
+  postgres_data:
+
+
+# ============================================================
+# NETWORK
+# ============================================================
+networks:
+  weather_network:
+    driver: bridge

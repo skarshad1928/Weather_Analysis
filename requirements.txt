@@ -1,0 +1,25 @@
+# ==========================================================
+# WEATHER DATA PLATFORM - PYTHON DEPENDENCIES
+# ==========================================================
+
+# Weather API
+requests
+
+# Environment variables
+python-dotenv
+
+# MongoDB Atlas
+pymongo
+
+# Data processing
+pandas
+numpy
+
+# PySpark
+pyspark
+
+# PostgreSQL / Supabase
+psycopg2-binary
+
+# Airflow provider
+apache-airflow-providers-apache-spark

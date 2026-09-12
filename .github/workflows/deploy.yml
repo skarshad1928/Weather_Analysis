@@ -1,0 +1,92 @@
+name: Weather Data Platform Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+
+jobs:
+
+  # ==========================================================
+  # CHECK PROJECT
+  # ==========================================================
+
+  test:
+    name: Test Project
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check Python files
+        run: |
+          python -m py_compile scripts/weather_data_collection.py
+          python -m py_compile scripts/weather_etl.py
+          python -m py_compile dags/weather_collection_dag.py
+          python -m py_compile dags/weather_etl_dag.py
+
+
+  # ==========================================================
+  # BUILD DOCKER IMAGE
+  # ==========================================================
+
+  build:
+    name: Build Docker Image
+
+    needs: test
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          tags: weather-data-platform:latest
+
+
+  # ==========================================================
+  # DEPLOY
+  # ==========================================================
+
+  deploy:
+    name: Deploy Weather Platform
+
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deployment completed
+        run: |
+          echo "Weather Data Platform deployment pipeline completed."
+          echo "Airflow + PySpark + MongoDB + Supabase PostgreSQL"
